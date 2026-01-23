@@ -109,8 +109,9 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/yaswanth_2022bcs0049_lab4:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/yaswanth_2022bcs0049_lab4:${{ github.sha }}
+                    yash450987/yaswanth_2022bcs0049_lab4:latest
+                    yash450987/yaswanth_2022bcs0049_lab4:${{ github.sha }}
+
 
       - name: Update BEST_MSE variable
         run: |
