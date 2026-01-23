@@ -1,0 +1,124 @@
+name: Lab4 CI/CD - Train and Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    outputs:
+      mse: ${{ steps.read_metrics.outputs.mse }}
+      r2: ${{ steps.read_metrics.outputs.r2 }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Train model
+        run: |
+          python scripts/train.py
+
+      - name: Read metrics
+        id: read_metrics
+        run: |
+          echo "mse=$(python -c "import json; print(json.load(open('artifacts/metrics.json'))['mse'])")" >> $GITHUB_OUTPUT
+          echo "r2=$(python -c "import json; print(json.load(open('artifacts/metrics.json'))['r2'])")" >> $GITHUB_OUTPUT
+
+      - name: Upload artifacts (model + metrics)
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-artifacts
+          path: |
+            artifacts/model.pkl
+            artifacts/metrics.json
+
+  deploy:
+    needs: train
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts from train job
+        uses: actions/download-artifact@v4
+        with:
+          name: model-artifacts
+          path: downloaded_artifacts
+
+      - name: Compare metrics with baseline
+        id: compare
+        run: |
+          echo "Baseline BEST_MSE: ${{ vars.BEST_MSE }}"
+          echo "Current MSE: ${{ needs.train.outputs.mse }}"
+
+          python - << 'PY'
+          import os, sys
+          best_mse = float(os.environ["BEST_MSE"])
+          current_mse = float(os.environ["CURRENT_MSE"])
+          if current_mse < best_mse:
+              print("IMPROVED=1")
+          else:
+              print("IMPROVED=0")
+          PY
+        env:
+          BEST_MSE: ${{ vars.BEST_MSE }}
+          CURRENT_MSE: ${{ needs.train.outputs.mse }}
+
+      - name: Stop if metric did not improve
+        run: |
+          python - << 'PY'
+          import os
+          best_mse = float(os.environ["BEST_MSE"])
+          current_mse = float(os.environ["CURRENT_MSE"])
+          if current_mse >= best_mse:
+              print("2022BCS0049 ---- Metric did not improve")
+              raise SystemExit(0)
+          print("Metric improved, deploying...")
+          PY
+        env:
+          BEST_MSE: ${{ vars.BEST_MSE }}
+          CURRENT_MSE: ${{ needs.train.outputs.mse }}
+
+      - name: Prepare model folder for Docker build
+        run: |
+          mkdir -p model
+          cp downloaded_artifacts/model.pkl model/model.pkl
+          cp downloaded_artifacts/metrics.json model/metrics.json
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/yaswanth_2022bcs0049_lab4:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/yaswanth_2022bcs0049_lab4:${{ github.sha }}
+
+      - name: Update BEST_MSE variable
+        run: |
+          echo "Updating BEST_MSE to ${{ needs.train.outputs.mse }}"
+          curl -L \
+            -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/actions/variables/BEST_MSE \
+            -d "{\"name\":\"BEST_MSE\",\"value\":\"${{ needs.train.outputs.mse }}\"}"
