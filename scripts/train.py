@@ -16,7 +16,7 @@ OUTPUT_DIR = "artifacts"
 MODEL_PATH = os.path.join(OUTPUT_DIR, "model.pkl")
 METRICS_PATH = os.path.join(OUTPUT_DIR, "metrics.json")
 
-TEST_SIZE = 0.4
+TEST_SIZE = 0.5
 RANDOM_STATE = 42
 ALPHA = 1.0
 # ----------------------------------------
