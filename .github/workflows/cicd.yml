@@ -2,7 +2,7 @@ name: Lab4 CI/CD - Train and Deploy
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 jobs:
@@ -57,63 +57,59 @@ jobs:
           name: model-artifacts
           path: downloaded_artifacts
 
-      - name: Compare metrics with baseline
-        id: compare
+      # ✅ GATING STEP: decide improved or not
+      - name: Decide if model improved
+        id: gate
         run: |
-          echo "Baseline BEST_MSE: ${{ vars.BEST_MSE }}"
-          echo "Current MSE: ${{ needs.train.outputs.mse }}"
-
           python - << 'PY'
-          import os, sys
+          import json, os
           best_mse = float(os.environ["BEST_MSE"])
-          current_mse = float(os.environ["CURRENT_MSE"])
-          if current_mse < best_mse:
-              print("IMPROVED=1")
-          else:
-              print("IMPROVED=0")
+          current_mse = float(json.load(open("downloaded_artifacts/metrics.json"))["mse"])
+          improved = current_mse < best_mse
+
+          print(f"Baseline BEST_MSE: {best_mse}")
+          print(f"Current MSE: {current_mse}")
+          print(f"IMPROVED: {improved}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"improved={'true' if improved else 'false'}\n")
           PY
         env:
           BEST_MSE: ${{ vars.BEST_MSE }}
-          CURRENT_MSE: ${{ needs.train.outputs.mse }}
 
-      - name: Stop if metric did not improve
+      # ✅ If NOT improved: print message and skip deploy steps
+      - name: Metric did not improve (skip deployment)
+        if: steps.gate.outputs.improved == 'false'
         run: |
-          python - << 'PY'
-          import os
-          best_mse = float(os.environ["BEST_MSE"])
-          current_mse = float(os.environ["CURRENT_MSE"])
-          if current_mse >= best_mse:
-              print("2022BCS0049 ---- Metric did not improve")
-              raise SystemExit(0)
-          print("Metric improved, deploying...")
-          PY
-        env:
-          BEST_MSE: ${{ vars.BEST_MSE }}
-          CURRENT_MSE: ${{ needs.train.outputs.mse }}
+          echo "2022BCS0049 ---- Metric did not improve, skipping deployment"
 
+      # ✅ Deploy steps run ONLY when improved
       - name: Prepare model folder for Docker build
+        if: steps.gate.outputs.improved == 'true'
         run: |
           mkdir -p model
           cp downloaded_artifacts/model.pkl model/model.pkl
           cp downloaded_artifacts/metrics.json model/metrics.json
 
       - name: Login to Docker Hub
+        if: steps.gate.outputs.improved == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and Push Docker image
+        if: steps.gate.outputs.improved == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-                    yash450987/yaswanth_2022bcs0049_lab4:latest
-                    yash450987/yaswanth_2022bcs0049_lab4:${{ github.sha }}
-
+            yash450987/yaswanth_2022bcs0049_lab4:latest
+            yash450987/yaswanth_2022bcs0049_lab4:${{ github.sha }}
 
       - name: Update BEST_MSE variable
+        if: steps.gate.outputs.improved == 'true'
         run: |
           echo "Updating BEST_MSE to ${{ needs.train.outputs.mse }}"
           curl -L \
