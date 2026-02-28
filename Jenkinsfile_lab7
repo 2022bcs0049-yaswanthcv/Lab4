@@ -18,14 +18,15 @@ pipeline {
             steps {
                 sh '''
                 docker rm -f lab7_test_container || true
-                docker run -d -p 8001:8000 --name lab7_test_container yash450987/yaswanth_2022bcs0049_lab4:latest
-        
+                docker run -d --name lab7_test_container \
+                    yash450987/yaswanth_2022bcs0049_lab4:latest
+
                 echo "Waiting for API to start..."
 
-                for i in {1..15}
+                for i in {1..20}
                 do
                     sleep 2
-                    if curl -s http://localhost:8001/docs > /dev/null; then
+                    if docker exec lab7_test_container curl -s http://localhost:8000/docs > /dev/null; then
                         echo "API is ready"
                         exit 0
                     fi
