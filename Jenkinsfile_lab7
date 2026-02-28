@@ -21,7 +21,7 @@ pipeline {
                 docker run -d -p 8001:8000 --name lab7_test_container yash450987/yaswanth_2022bcs0049_lab4:latest
         
                 echo "Waiting for API to start..."
-        
+
                 for i in {1..15}
                 do
                     sleep 2
@@ -30,7 +30,7 @@ pipeline {
                         exit 0
                     fi
                 done
-        
+
                 echo "API failed to start"
                 docker logs lab7_test_container
                 exit 1
