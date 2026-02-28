@@ -19,7 +19,19 @@ pipeline {
                 sh """
                 docker rm -f $CONTAINER || true
                 docker run -d -p 8001:8000 --name $CONTAINER $IMAGE
-                sleep 10
+
+                echo "Waiting for API to start..."
+                for i in {1..30}; do
+                    if curl -s http://localhost:8001/docs > /dev/null; then
+                        echo "API is up"
+                        exit 0
+                    fi
+                    sleep 2
+                done
+
+                echo "API failed to start"
+                docker logs $CONTAINER
+                exit 1
                 """
             }
         }
