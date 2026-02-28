@@ -1,0 +1,65 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE = "yash450987/yaswanth_2022bcs0049_lab4:latest"
+        CONTAINER = "lab7_test_container"
+    }
+
+    stages {
+
+        stage('Pull Image from DockerHub') {
+            steps {
+                sh "docker pull $IMAGE"
+            }
+        }
+
+        stage('Run Container') {
+            steps {
+                sh """
+                docker rm -f $CONTAINER || true
+                docker run -d -p 8001:8000 --name $CONTAINER $IMAGE
+                sleep 10
+                """
+            }
+        }
+
+        stage('Test Valid Request') {
+            steps {
+                sh """
+                curl -X POST "http://localhost:8001/predict" \
+                -H "Content-Type: application/json" \
+                -d '{
+                    "fixed_acidity": 7,
+                    "volatile_acidity": 0.3,
+                    "citric_acid": 0.4,
+                    "residual_sugar": 6,
+                    "chlorides": 0.05,
+                    "free_sulfur_dioxide": 30,
+                    "total_sulfur_dioxide": 120,
+                    "density": 0.995,
+                    "pH": 3.3,
+                    "sulphates": 0.6,
+                    "alcohol": 10
+                }'
+                """
+            }
+        }
+
+        stage('Test Invalid Request') {
+            steps {
+                sh """
+                curl -X POST "http://localhost:8001/predict" \
+                -H "Content-Type: application/json" \
+                -d '{"wrong_field": 123}' || true
+                """
+            }
+        }
+
+        stage('Stop Container') {
+            steps {
+                sh "docker rm -f $CONTAINER || true"
+            }
+        }
+    }
+}
