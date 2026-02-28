@@ -11,10 +11,17 @@ from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_squared_error, r2_score
 
 # ---------------- CONFIG ----------------
-DATA_PATH = "dataset/winequality-white.csv"  # ensure dataset folder exists
-OUTPUT_DIR = "artifacts"
-MODEL_PATH = os.path.join(OUTPUT_DIR, "model.pkl")
-METRICS_PATH = os.path.join(OUTPUT_DIR, "metrics.json")
+DATA_PATH = "dataset/winequality-white.csv"
+
+# Primary output (for CI/CD - Lab4)
+ARTIFACTS_DIR = "artifacts"
+MODEL_ARTIFACT_PATH = os.path.join(ARTIFACTS_DIR, "model.pkl")
+METRICS_ARTIFACT_PATH = os.path.join(ARTIFACTS_DIR, "metrics.json")
+
+# Secondary output (for Docker - Lab6 & Lab7)
+MODEL_DIR = "model"
+MODEL_DEPLOY_PATH = os.path.join(MODEL_DIR, "model.pkl")
+METRICS_DEPLOY_PATH = os.path.join(MODEL_DIR, "metrics.json")
 
 TEST_SIZE = 0.4
 RANDOM_STATE = 42
@@ -23,41 +30,51 @@ ALPHA = 1.0
 
 
 def main():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    # Create required folders
+    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+    os.makedirs(MODEL_DIR, exist_ok=True)
 
+    # Load dataset
     df = pd.read_csv(DATA_PATH, sep=";")
 
     X = df.drop("quality", axis=1)
     y = df["quality"]
 
+    # Train-test split
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE
     )
 
+    # Model pipeline
     model = Pipeline([
         ("scaler", StandardScaler()),
         ("regressor", Ridge(alpha=ALPHA))
     ])
 
+    # Train
     model.fit(X_train, y_train)
     preds = model.predict(X_test)
 
+    # Metrics
     mse = float(mean_squared_error(y_test, preds))
     r2 = float(r2_score(y_test, preds))
-
-    # save model
-    joblib.dump(model, MODEL_PATH)
-
-    # save metrics
     metrics = {"mse": mse, "r2": r2}
-    with open(METRICS_PATH, "w") as f:
+
+    # -------- Save to artifacts (Lab4 CI/CD) --------
+    joblib.dump(model, MODEL_ARTIFACT_PATH)
+    with open(METRICS_ARTIFACT_PATH, "w") as f:
+        json.dump(metrics, f, indent=4)
+
+    # -------- Save to model folder (Docker deployment) --------
+    joblib.dump(model, MODEL_DEPLOY_PATH)
+    with open(METRICS_DEPLOY_PATH, "w") as f:
         json.dump(metrics, f, indent=4)
 
     print("===== Training Completed =====")
     print(f"MSE: {mse}")
     print(f"R2: {r2}")
-    print(f"Saved model -> {MODEL_PATH}")
-    print(f"Saved metrics -> {METRICS_PATH}")
+    print(f"Saved -> {MODEL_ARTIFACT_PATH}")
+    print(f"Saved -> {MODEL_DEPLOY_PATH}")
 
 
 if __name__ == "__main__":
