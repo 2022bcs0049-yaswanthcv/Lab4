@@ -8,7 +8,7 @@ pipeline {
 
     stages {
 
-        stage('Pull Image from DockerHub') {
+        stage('Pull Image') {
             steps {
                 sh "docker pull $IMAGE"
             }
@@ -17,23 +17,26 @@ pipeline {
         stage('Run Container') {
             steps {
                 sh '''
-                docker rm -f lab7_test_container || true
-                docker run -d --name lab7_test_container \
-                    yash450987/yaswanth_2022bcs0049_lab4:latest
+                docker rm -f $CONTAINER || true
+
+                # Run container with port mapping
+                docker run -d --name $CONTAINER -p 8001:8000 $IMAGE
 
                 echo "Waiting for API to start..."
 
+                # Wait for readiness (from Jenkins host)
                 for i in {1..20}
                 do
-                    sleep 2
-                    if docker exec lab7_test_container curl -s http://localhost:8000/docs > /dev/null; then
+                    sleep 3
+                    if curl -s http://host.docker.internal:8001/docs > /dev/null; then
                         echo "API is ready"
                         exit 0
                     fi
+                    echo "Waiting..."
                 done
 
                 echo "API failed to start"
-                docker logs lab7_test_container
+                docker logs $CONTAINER
                 exit 1
                 '''
             }
@@ -41,8 +44,10 @@ pipeline {
 
         stage('Test Valid Request') {
             steps {
-                sh """
-                curl -X POST "http://localhost:8001/predict" \
+                sh '''
+                echo "Testing valid request..."
+
+                curl -s -X POST "http://host.docker.internal:8001/predict" \
                 -H "Content-Type: application/json" \
                 -d '{
                     "fixed_acidity": 7,
@@ -57,17 +62,19 @@ pipeline {
                     "sulphates": 0.6,
                     "alcohol": 10
                 }'
-                """
+                '''
             }
         }
 
         stage('Test Invalid Request') {
             steps {
-                sh """
-                curl -X POST "http://localhost:8001/predict" \
+                sh '''
+                echo "Testing invalid request..."
+
+                curl -s -X POST "http://host.docker.internal:8001/predict" \
                 -H "Content-Type: application/json" \
                 -d '{"wrong_field": 123}' || true
-                """
+                '''
             }
         }
 
