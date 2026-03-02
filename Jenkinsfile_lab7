@@ -51,7 +51,7 @@ pipeline {
                 curl --fail -X POST "http://172.17.0.1:8001/predict" \
                 -H "Content-Type: application/json" \
                 -d '{
-                    "fixed_acidity": "wrong",
+                    "fixed_acidity": 7,
                     "volatile_acidity": 0.3,
                     "citric_acid": 0.4,
                     "residual_sugar": 6,
