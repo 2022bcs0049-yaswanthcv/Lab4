@@ -51,7 +51,7 @@ pipeline {
                 curl -X POST "http://$HOST_IP:8001/predict" \
                 -H "Content-Type: application/json" \
                 -d '{
-                    "fixed_acidity": 7,
+                    "fixed_acidity": wrong,
                     "volatile_acidity": 0.3,
                     "citric_acid": 0.4,
                     "residual_sugar": 6,
