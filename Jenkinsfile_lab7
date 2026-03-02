@@ -4,6 +4,7 @@ pipeline {
     environment {
         IMAGE = "yash450987/yaswanth_2022bcs0049_lab4:latest"
         CONTAINER = "lab7_test_container"
+        HOST_IP = "172.17.0.1"
     }
 
     stages {
@@ -17,7 +18,7 @@ pipeline {
         stage('Run Container') {
             steps {
                 sh '''
-                echo "Removing old container..."
+                echo "Removing old container if exists..."
                 docker rm -f $CONTAINER || true
 
                 echo "Starting container on port 8001..."
@@ -28,7 +29,7 @@ pipeline {
                 for i in {1..20}
                 do
                     sleep 3
-                    if curl -s http://host.docker.internal:8001/docs > /dev/null; then
+                    if curl -s http://$HOST_IP:8001/docs > /dev/null; then
                         echo "API is ready"
                         exit 0
                     fi
@@ -45,9 +46,9 @@ pipeline {
         stage('Test Valid Request') {
             steps {
                 sh '''
-                echo "Testing valid request..."
+                echo "Sending valid request..."
 
-                curl -X POST "http://host.docker.internal:8001/predict" \
+                curl -X POST "http://$HOST_IP:8001/predict" \
                 -H "Content-Type: application/json" \
                 -d '{
                     "fixed_acidity": 7,
@@ -69,9 +70,9 @@ pipeline {
         stage('Test Invalid Request') {
             steps {
                 sh '''
-                echo "Testing invalid request..."
+                echo "Sending invalid request..."
 
-                curl -X POST "http://host.docker.internal:8001/predict" \
+                curl -X POST "http://$HOST_IP:8001/predict" \
                 -H "Content-Type: application/json" \
                 -d '{"wrong_field": 123}' || true
                 '''
@@ -80,7 +81,10 @@ pipeline {
 
         stage('Stop Container') {
             steps {
-                sh 'docker rm -f $CONTAINER || true'
+                sh '''
+                echo "Stopping container..."
+                docker rm -f $CONTAINER || true
+                '''
             }
         }
     }
